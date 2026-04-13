@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { parseItemsListResponse } from '../../utils/parseItemsListResponse';
+import { itemEffectiveUnitPrice, itemHasDiscount } from '../../utils/itemPrice';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -14,13 +16,23 @@ interface Item {
   id: number;
   name: string;
   price: number;
+  discountedPrice?: number | null;
   image: string;
   description: string;
   categoryId?: number;
   category?: Category;
 }
 
-const emptyForm = { name: '', price: '', image: '', description: '', categoryId: '' };
+const emptyForm = {
+  name: '',
+  price: '',
+  discountedPrice: '',
+  image: '',
+  description: '',
+  categoryId: '',
+};
+
+const ADMIN_ITEMS_PAGE_SIZE = 12;
 
 const ItemsPage: React.FC = () => {
   const { token, logout } = useAuth();
@@ -28,6 +40,9 @@ const ItemsPage: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listPage, setListPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -58,19 +73,27 @@ const ItemsPage: React.FC = () => {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API}/items?limit=100`);
-      setItems(res.data.data || []);
+      const res = await axios.get(
+        `${API}/items?page=${listPage}&limit=${ADMIN_ITEMS_PAGE_SIZE}`,
+      );
+      const { items: list, lastPage, total } = parseItemsListResponse(res);
+      setItems((list || []) as Item[]);
+      setTotalPages(lastPage);
+      setTotalCount(total);
     } catch {
       setItems([]);
+      setTotalPages(1);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listPage]);
 
   const fetchCategories = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/categories`);
-      setCategories(res.data || []);
+      const payload = res.data?.data;
+      setCategories(Array.isArray(payload) ? payload : []);
     } catch {
       setCategories([]);
     }
@@ -80,6 +103,12 @@ const ItemsPage: React.FC = () => {
     fetchItems();
     fetchCategories();
   }, [fetchItems, fetchCategories]);
+
+  useEffect(() => {
+    if (!loading && totalPages >= 1 && listPage > totalPages) {
+      setListPage(totalPages);
+    }
+  }, [loading, listPage, totalPages]);
 
   const openAdd = () => { 
     setEditItem(null); 
@@ -94,6 +123,10 @@ const ItemsPage: React.FC = () => {
     setForm({
       name: item.name,
       price: String(item.price),
+      discountedPrice:
+        item.discountedPrice != null && item.discountedPrice !== undefined
+          ? String(item.discountedPrice)
+          : '',
       image: item.image,
       description: item.description,
       categoryId: String(item.categoryId || ''),
@@ -110,6 +143,7 @@ const ItemsPage: React.FC = () => {
       const formData = new FormData();
       formData.append('name', form.name);
       formData.append('price', form.price);
+      formData.append('discountedPrice', form.discountedPrice.trim());
       formData.append('description', form.description);
       if (form.categoryId) {
         formData.append('categoryId', form.categoryId);
@@ -173,8 +207,16 @@ const ItemsPage: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Manage Items</h1>
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Manage Items</h1>
+            {!loading && totalCount > 0 && (
+              <p className="mt-1 text-sm text-gray-500">
+                {(listPage - 1) * ADMIN_ITEMS_PAGE_SIZE + 1}–
+                {Math.min(listPage * ADMIN_ITEMS_PAGE_SIZE, totalCount)} of {totalCount} products
+              </p>
+            )}
+          </div>
           <button
             onClick={openAdd}
             className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -215,7 +257,18 @@ const ItemsPage: React.FC = () => {
                       />
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
-                    <td className="px-6 py-4 text-blue-600 font-semibold">PKR {Number(item.price).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-blue-600 font-semibold">
+                      {itemHasDiscount(item) ? (
+                        <span className="flex flex-col gap-0.5">
+                          <span>PKR {itemEffectiveUnitPrice(item).toFixed(2)}</span>
+                          <span className="text-xs text-gray-400 line-through font-medium">
+                            PKR {Number(item.price).toFixed(2)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span>PKR {Number(item.price).toFixed(2)}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-500">{item.category?.name || <span className="italic text-gray-400">None</span>}</td>
                     <td className="px-6 py-4 text-gray-500 text-sm max-w-xs truncate">{item.description}</td>
                     <td className="px-6 py-4 text-right">
@@ -236,6 +289,31 @@ const ItemsPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/80 px-6 py-4">
+                <span className="text-sm text-gray-600">
+                  Page {listPage} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={listPage <= 1}
+                    onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={listPage >= totalPages}
+                    onClick={() => setListPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )
       }
@@ -243,23 +321,32 @@ const ItemsPage: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold text-gray-900 mb-5">{editItem ? 'Edit Item' : 'Add New Item'}</h2>
-            <form onSubmit={handleSave}>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
+          <div className="flex min-h-full items-center justify-center bg-black/50 p-4 py-8 sm:p-6">
+            <div
+              className="my-auto flex min-h-0 w-full max-w-lg max-h-[min(90vh,calc(100dvh-2rem))] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="item-modal-title"
+            >
+              <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6">
+                  <h2 id="item-modal-title" className="text-xl font-bold text-gray-900 mb-5">
+                    {editItem ? 'Edit Item' : 'Add New Item'}
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     required
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="T-Shirt"
+                    placeholder="Product Name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Price ($)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Price (PKR)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -271,8 +358,26 @@ const ItemsPage: React.FC = () => {
                     placeholder="19.99"
                   />
                 </div>
-              </div>
-              <div className="mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Discounted price (PKR){' '}
+                    <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.discountedPrice}
+                    onChange={(e) => setForm({ ...form, discountedPrice: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Leave empty for no sale"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Must be less than regular price. Clear to remove sale.
+                  </p>
+                </div>
+                  </div>
+                  <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
                 <select
                   value={form.categoryId}
@@ -284,8 +389,8 @@ const ItemsPage: React.FC = () => {
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
-              </div>
-              <div className="mb-4">
+                  </div>
+                  <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Product Image</label>
                 <div className="flex items-center gap-4 py-2">
                   <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 flex-shrink-0 flex items-center justify-center">
@@ -318,7 +423,7 @@ const ItemsPage: React.FC = () => {
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-400 text-[10px]">URL</span>
                   </div>
-                  <input
+                  {/* <input
                     value={form.image}
                     onChange={(e) => {
                       setForm({ ...form, image: e.target.value });
@@ -327,10 +432,10 @@ const ItemsPage: React.FC = () => {
                     }}
                     className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                     placeholder="Or paste direct image link..."
-                  />
+                  /> */}
                 </div>
-              </div>
-              <div className="mb-6">
+                  </div>
+                  <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
                 <textarea
                   value={form.description}
@@ -340,8 +445,9 @@ const ItemsPage: React.FC = () => {
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
                   placeholder="Product description..."
                 />
-              </div>
-              <div className="flex gap-3">
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-3 border-t border-gray-100 bg-white p-6 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -358,6 +464,7 @@ const ItemsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

@@ -13,7 +13,7 @@ const CartPage: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Your cart is empty</h2>
         <p className="text-gray-500 mb-6">Looks like you haven't added anything yet.</p>
         <Link
-          to="/"
+          to="/store"
           className="inline-block bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
         >
           Browse Products
@@ -42,7 +42,18 @@ const CartPage: React.FC = () => {
             />
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-gray-900 text-lg truncate">{item.name}</h3>
-              <p className="text-blue-600 font-bold text-lg">PKR {item.price.toFixed(2)} each</p>
+              <p className="text-blue-600 font-bold text-lg">
+                {item.compareAtPrice != null && item.compareAtPrice > item.price ? (
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                    <span>PKR {item.price.toFixed(2)} each</span>
+                    <span className="text-sm text-gray-400 line-through font-semibold">
+                      PKR {item.compareAtPrice.toFixed(2)}
+                    </span>
+                  </span>
+                ) : (
+                  <>PKR {item.price.toFixed(2)} each</>
+                )}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <button

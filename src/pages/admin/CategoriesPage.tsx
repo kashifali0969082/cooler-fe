@@ -34,7 +34,8 @@ const CategoriesPage: React.FC = () => {
     setLoading(true);
     try {
       const res = await axios.get(`${API}/categories`);
-      setCategories(res.data || []);
+      const payload = res.data?.data;
+      setCategories(Array.isArray(payload) ? payload : []);
     } catch {
       setCategories([]);
     } finally {

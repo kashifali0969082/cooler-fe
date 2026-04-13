@@ -6,6 +6,8 @@ export interface CartItem {
   price: number;
   image: string;
   quantity: number;
+  /** List price when added on sale (display-only strikethrough). */
+  compareAtPrice?: number;
 }
 
 interface CartContextType {

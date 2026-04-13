@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('admin@cooler.com');
+  const [email, setEmail] = useState('kashifali0969082@gmail.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -55,16 +55,24 @@ const LoginPage: React.FC = () => {
               className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <div className="mb-6">
+          <div className="mb-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Admin@123"
+              placeholder="Password Please"
               required
               className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+          <div className="mb-6 text-right">
+            <Link
+              to="/admin/forgot-password"
+              className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              Forgot password?
+            </Link>
           </div>
           <button
             type="submit"
@@ -76,7 +84,7 @@ const LoginPage: React.FC = () => {
         </form>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Default: admin@cooler.com / Admin@123
+          Default login: kashifali0969082@gmail.com — use Forgot password if needed
         </p>
       </div>
     </div>
