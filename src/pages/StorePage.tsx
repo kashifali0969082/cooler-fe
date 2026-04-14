@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useSearchParams } from 'react-router-dom';
+import Slider, { Settings as SlickSettings } from 'react-slick';
 import { useCart } from '../context/CartContext';
 import { parseItemsListResponse } from '../utils/parseItemsListResponse';
 import { itemEffectiveUnitPrice, itemHasDiscount } from '../utils/itemPrice';
@@ -35,6 +36,7 @@ const StorePage: React.FC = () => {
   const [toast, setToast] = useState('');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [categoryQuery, setCategoryQuery] = useState('');
   const { addToCart } = useCart();
 
   const page = useMemo((): number => {
@@ -235,6 +237,15 @@ const StorePage: React.FC = () => {
       ? categories.find((c) => c.id === selectedCategoryId)?.name
       : null;
 
+  const filteredCategories = useMemo((): Category[] => {
+    const q = categoryQuery.trim().toLowerCase();
+    if (q === '') return categories;
+    return categories.filter((c) => c.name.toLowerCase().includes(q));
+  }, [categories, categoryQuery]);
+
+  const categorySlidesCount = filteredCategories.length + 1; // +1 for "All Products"
+  const shouldAutoScrollCategories = categorySlidesCount > 1;
+
   const handleAdd = (item: Item, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     addToCart({
@@ -270,36 +281,80 @@ const StorePage: React.FC = () => {
       </div>
 
       {/* Category Filter */}
-      <div className="mb-10 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            syncCategoryToUrl(null);
-          }}
-          className={`px-6 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
-            selectedCategoryId === null
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-4 ring-blue-50'
-              : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
-          }`}
-        >
-          All Products
-        </button>
-        {categories.map((cat) => (
-          <button
-            type="button"
-            key={cat.id}
-            onClick={() => {
-              syncCategoryToUrl(cat.id);
-            }}
-            className={`px-6 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
-              selectedCategoryId === cat.id
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-4 ring-blue-50'
-                : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
-            }`}
+      <div className="mb-10">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <input
+              value={categoryQuery}
+              onChange={(e) => setCategoryQuery(e.target.value)}
+              placeholder="Search category..."
+              className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 pr-10 text-sm font-semibold text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+            {categoryQuery.trim() !== '' ? (
+              <button
+                type="button"
+                onClick={() => setCategoryQuery('')}
+                aria-label="Clear category search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+          <p className="text-xs font-semibold text-gray-400">
+            {filteredCategories.length} of {categories.length} categories
+          </p>
+        </div>
+
+        <div className="rounded-2xl">
+          <Slider
+            {...({
+              infinite: shouldAutoScrollCategories,
+              autoplay: shouldAutoScrollCategories,
+              // continuous marquee feel
+              speed: 4500,
+              autoplaySpeed: 0,
+              cssEase: 'linear',
+              arrows: true,
+              swipeToSlide: true,
+              variableWidth: true,
+              slidesToShow: 1,
+              slidesToScroll: 1,
+              pauseOnHover: true,
+              adaptiveHeight: false,
+            } satisfies SlickSettings)}
           >
-            {cat.name}
-          </button>
-        ))}
+            <div className="pr-2">
+              <button
+                type="button"
+                onClick={() => syncCategoryToUrl(null)}
+                className={`whitespace-nowrap px-6 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
+                  selectedCategoryId === null
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-4 ring-blue-50'
+                    : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
+                }`}
+              >
+                All Products
+              </button>
+            </div>
+
+            {filteredCategories.map((cat) => (
+              <div key={cat.id} className="pr-2">
+                <button
+                  type="button"
+                  onClick={() => syncCategoryToUrl(cat.id)}
+                  className={`whitespace-nowrap px-6 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
+                    selectedCategoryId === cat.id
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 ring-4 ring-blue-50'
+                      : 'bg-white text-gray-500 border border-gray-100 hover:bg-gray-50'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              </div>
+            ))}
+          </Slider>
+        </div>
       </div>
 
       {/* Price filter (effective / sale unit price, PKR) */}
